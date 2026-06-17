@@ -181,37 +181,85 @@ class API {
     }
   }
 
+  // static Future<dynamic> registerAdminAPI({
+  //   required String firstName,
+  //   required String lastName,
+  //   required String countryCode,
+  //   required String phone,
+  //   required String fcmToken,
+  //   String? gmail,
+  //   String? latitude,
+  //   String? longitude,
+  // }) async {
+  //   try {
+  //     final response = await dio.post(
+  //       '/auth/admin/register',
+  //       data: {
+  //         "first_name": firstName,
+  //         "last_name": lastName,
+  //         "country_code": countryCode,
+  //         "phone": phone,
+  //         "fcm_token": fcmToken,
+  //         if (gmail != null && gmail.isNotEmpty) "gmail": gmail,
+  //         if (latitude != null) "latitude": latitude,
+  //         if (longitude != null) "longitude": longitude,
+  //       },
+  //     );
+  //     final data = _responseMap(response.data);
+  //     await _saveAuthTokenIfPresent(data);
+  //     return data;
+  //   } catch (e) {
+  //     return {'status': 'error', 'message': e.toString()};
+  //   }
+  // }
+
   static Future<dynamic> registerAdminAPI({
-    required String firstName,
-    required String lastName,
-    required String countryCode,
-    required String phone,
-    required String fcmToken,
-    String? gmail,
-    String? latitude,
-    String? longitude,
-  }) async {
-    try {
-      final response = await dio.post(
-        '/auth/admin/register',
-        data: {
-          "first_name": firstName,
-          "last_name": lastName,
-          "country_code": countryCode,
-          "phone": phone,
-          "fcm_token": fcmToken,
-          if (gmail != null && gmail.isNotEmpty) "gmail": gmail,
-          if (latitude != null) "latitude": latitude,
-          if (longitude != null) "longitude": longitude,
-        },
-      );
-      final data = _responseMap(response.data);
-      await _saveAuthTokenIfPresent(data);
-      return data;
-    } catch (e) {
-      return {'status': 'error', 'message': e.toString()};
-    }
+  required String firstName,
+  required String lastName,
+  required String countryCode,
+  required String phoneCode,
+  required String phone,
+  required String fcmToken,
+  String? gmail,
+  String? latitude,
+  String? longitude,
+}) async {
+  try {
+    final response = await dio.post(
+      '/auth/admin/register',
+      data: {
+        "first_name": firstName,
+        "last_name": lastName,
+        "country_code": countryCode,
+        "phone_code": phoneCode,
+        "phone": phone,
+        "fcm_token": fcmToken,
+        "gmail": gmail ?? "",
+        "latitude": latitude ?? "",
+        "longitude": longitude ?? "",
+      },
+    );
+
+    final data = _responseMapFromResponse(response);
+
+    await _saveAuthTokenIfPresent(data);
+
+    return data;
+  } on DioException catch (e) {
+    return {
+      'status': 'error',
+      'message': e.response?.data is Map
+          ? (_responseMap(e.response?.data)['message'] ??
+              'Registration failed. Please try again.')
+          : (e.message ?? 'Registration failed. Please try again.'),
+    };
+  } catch (e) {
+    return {
+      'status': 'error',
+      'message': e.toString(),
+    };
   }
+}
 
   static Future<dynamic> verifyOtpAPI({
     required String otp,
@@ -236,7 +284,7 @@ class API {
   }) async {
     try {
       final response = await dio.post(
-        '/auth/admin/login/verify-otp',
+        '/auth/login/verify-otp',
         data: {
           "otp": otp,
         },
@@ -265,6 +313,7 @@ class API {
 
   static Future<dynamic> loginSendOtpAPI({
     required String countryCode,
+    required String phoneCode,
     required String phone,
   }) async {
     try {
@@ -272,6 +321,7 @@ class API {
         '/auth/admin/login',
         data: {
           "country_code": countryCode,
+          "phone_code": phoneCode,
           "phone": phone,
         },
       );
@@ -395,6 +445,75 @@ class API {
       };
     }
   }
+
+  static Future<dynamic> updateAdminProfile({
+  String? firstName,
+  String? lastName,
+  String? countryCode,
+  String? phoneCode,
+  String? phone,
+  String? gmail,
+  String? latitude,
+  String? longitude,
+  String? bio,
+  String? roleTitle,
+  String? specialization,
+  String? locationName,
+}) async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('auth_token');
+
+    if (token == null || token.isEmpty) {
+      return {
+        'status': 'error',
+        'message': 'Please login again before updating profile.',
+      };
+    }
+
+    final Map<String, dynamic> body = {};
+
+    if (firstName != null) body['first_name'] = firstName;
+    if (lastName != null) body['last_name'] = lastName;
+    if (countryCode != null) body['country_code'] = countryCode;
+    if (phoneCode != null) body['phone_code'] = phoneCode;
+    if (phone != null) body['phone'] = phone;
+    if (gmail != null) body['gmail'] = gmail;
+    if (latitude != null) body['latitude'] = latitude;
+    if (longitude != null) body['longitude'] = longitude;
+    if (bio != null) body['bio'] = bio;
+    if (roleTitle != null) body['role_title'] = roleTitle;
+    if (specialization != null) body['specialization'] = specialization;
+    if (locationName != null) body['location_name'] = locationName;
+
+    if (body.isEmpty) {
+      return {
+        'status': 'error',
+        'message': 'No profile details provided to update.',
+      };
+    }
+
+    final response = await dio.put(
+      '/users/admin/profile/update',
+      data: body,
+    );
+
+    return _responseMapFromResponse(response);
+  } on DioException catch (e) {
+    return {
+      'status': 'error',
+      'message': e.response?.data is Map
+          ? (_responseMap(e.response?.data)['message'] ??
+              'Profile update failed. Please try again.')
+          : (e.message ?? 'Profile update failed. Please try again.'),
+    };
+  } catch (e) {
+    return {
+      'status': 'error',
+      'message': e.toString(),
+    };
+  }
+}
 
   static Future<dynamic> updateAdminDocument({
     required File documentFile,

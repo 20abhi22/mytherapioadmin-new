@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:mytherapio_admin_app/backend/api.dart';
 import 'package:mytherapio_admin_app/screens/profile/contact_us_screen.dart';
 import 'package:mytherapio_admin_app/screens/profile/help_support_screen.dart';
@@ -38,6 +39,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String _name = 'Arjun Menon';
   String _email = 'arjun.menon@admin.com';
   String _phone = '+91 98765 43210';
+  String _phoneNumber = '';
+  String _countryCode = '';
+  String _phoneCode = '';
   String _role = 'Super Admin';
   String _location = 'Kochi, Kerala';
   String _bio = 'Managing platform operations and professional onboarding.';
@@ -93,6 +97,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
           final profilePhoto = _stringValue(data['profile_photo']);
           _name = _stringValue(data['name'], fallback: _name);
           _email = _stringValue(data['email'], fallback: _email);
+          _countryCode = _stringValue(data['country_code'], fallback: _countryCode);
+          _phoneCode = _stringValue(data['phone_code'], fallback: _phoneCode);
+          _phoneNumber = _stringValue(data['phone'], fallback: _phoneNumber);
           _phone = _formatPhone(data);
           _role = _stringValue(data['role'], fallback: 'Admin');
           _location = _stringValue(data['location'], fallback: _location);
@@ -132,17 +139,69 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   String _formatPhone(Map data) {
-    final countryCode = _stringValue(data['country_code']);
     final phoneCode = _stringValue(data['phone_code']);
     final phone = _stringValue(data['phone'], fallback: _phone);
-    final code = countryCode.isNotEmpty ? countryCode : phoneCode;
-    return code.isEmpty ? phone : '$code $phone';
+    return phoneCode.isEmpty ? phone : '$phoneCode $phone';
+  }
+
+  ({String firstName, String lastName}) _splitName(String fullName) {
+    final parts = fullName
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((part) => part.isNotEmpty)
+        .toList();
+
+    if (parts.isEmpty) return (firstName: '', lastName: '');
+    if (parts.length == 1) return (firstName: parts.first, lastName: '');
+
+    return (
+      firstName: parts.first,
+      lastName: parts.sublist(1).join(' '),
+    );
+  }
+
+  Future<bool> _submitProfileUpdate({
+    String? firstName,
+    String? lastName,
+    String? countryCode,
+    String? phoneCode,
+    String? phone,
+    String? gmail,
+    String? bio,
+    String? roleTitle,
+    String? locationName,
+    required String successMessage,
+  }) async {
+    final response = await API.updateAdminProfile(
+      firstName: firstName,
+      lastName: lastName,
+      countryCode: countryCode,
+      phoneCode: phoneCode,
+      phone: phone,
+      gmail: gmail,
+      bio: bio,
+      roleTitle: roleTitle,
+      locationName: locationName,
+    );
+
+    if (response is Map && response['status'] == 'success') {
+      API.showSnackBar('Success', successMessage);
+      return true;
+    }
+
+    final message = response is Map
+        ? (response['message'] ?? 'Update failed')
+        : 'Update failed';
+    API.showSnackBar('Error', message.toString());
+    return false;
   }
 
   List<_DocumentItem> _mapDocuments(dynamic docs) {
     if (docs is! List) return [];
 
-    return docs.whereType<Map>().map((doc) {
+    return docs.whereType<Map>().where((doc) {
+      return _stringValue(doc['doc_type']) != 'profile_photo';
+    }).map((doc) {
       final docType = _stringValue(doc['doc_type']);
       final fileName = _stringValue(doc['doc_file']);
       final name = _stringValue(
@@ -283,6 +342,54 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (!mounted) return;
       setState(() => _isUploadingDocument = false);
       _showErrorSnack('Unable to pick or upload file. ${e.toString()}');
+    }
+  }
+
+  Future<void> _pickAndUploadProfilePhoto(ImageSource source) async {
+    if (_isUploadingDocument) return;
+
+    const maxBytes = 5 * 1024 * 1024;
+
+    try {
+      final picked = await ImagePicker().pickImage(
+        source: source,
+        imageQuality: 85,
+      );
+
+      if (picked == null) return;
+      if (!mounted) return;
+
+      final file = File(picked.path);
+      final size = await file.length();
+
+      if (size > maxBytes) {
+        _showFileSizeError(selectedBytes: size, maxBytes: maxBytes);
+        return;
+      }
+
+      setState(() => _isUploadingDocument = true);
+      final result = await API.updateAdminDocument(
+        documentFile: file,
+        docType: 'profile_photo',
+      );
+
+      if (!mounted) return;
+      setState(() => _isUploadingDocument = false);
+
+      if (result is Map && result['status'] == 'success') {
+        _showSnack(context, 'Profile photo updated successfully');
+        await _loadAdminProfile();
+        return;
+      }
+
+      final msg = result is Map
+          ? (result['message'] ?? 'Profile photo update failed.')
+          : 'Profile photo update failed.';
+      _showErrorSnack(msg.toString());
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isUploadingDocument = false);
+      _showErrorSnack('Unable to update profile photo. ${e.toString()}');
     }
   }
 
@@ -499,12 +606,45 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ],
                     ),
                     const SizedBox(height: 12),
-                    Text(_name,
-                        style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.white,
-                            letterSpacing: -0.3)),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 32),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(
+                            child: Text(_name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w800,
+                                    color: Colors.white,
+                                    letterSpacing: -0.3)),
+                          ),
+                          const SizedBox(width: 8),
+                          GestureDetector(
+                            onTap: () => _showEditProfileSheet(context),
+                            child: Container(
+                              width: 26,
+                              height: 26,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.16),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: Colors.white.withOpacity(0.2),
+                                ),
+                              ),
+                              child: const Icon(
+                                Icons.edit_rounded,
+                                color: Colors.white,
+                                size: 13,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                     const SizedBox(height: 4),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -1210,9 +1350,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
             context,
             title: 'Edit Phone Number',
             label: 'Phone',
-            currentValue: _phone,
+            currentValue: _phoneNumber.isNotEmpty ? _phoneNumber : _phone,
             keyboardType: TextInputType.phone,
-            onSave: (val) => setState(() => _phone = val),
+            onSave: (val) async {
+              final success = await _submitProfileUpdate(
+                countryCode: _countryCode.isEmpty ? null : _countryCode,
+                phoneCode: _phoneCode.isEmpty ? null : _phoneCode,
+                phone: val,
+                successMessage: 'Contact updated successfully',
+              );
+              if (!success || !mounted) return false;
+              setState(() {
+                _phoneNumber = val;
+                _phone = _phoneCode.isEmpty ? val : '$_phoneCode $val';
+              });
+              return true;
+            },
           ),
         ),
         const _Divider(),
@@ -1228,7 +1381,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
             label: 'Email',
             currentValue: _email,
             keyboardType: TextInputType.emailAddress,
-            onSave: (val) => setState(() => _email = val),
+            onSave: (val) async {
+              final success = await _submitProfileUpdate(
+                gmail: val,
+                successMessage: 'Contact updated successfully',
+              );
+              if (!success || !mounted) return false;
+              setState(() => _email = val);
+              return true;
+            },
           ),
         ),
         const _Divider(),
@@ -1244,7 +1405,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
             label: 'Location',
             currentValue: _location,
             keyboardType: TextInputType.text,
-            onSave: (val) => setState(() => _location = val),
+            onSave: (val) async {
+              final success = await _submitProfileUpdate(
+                locationName: val,
+                successMessage: 'Profile updated successfully',
+              );
+              if (!success || !mounted) return false;
+              setState(() => _location = val);
+              return true;
+            },
           ),
         ),
       ],
@@ -1467,6 +1636,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final nameCtrl = TextEditingController(text: _name);
     final bioCtrl = TextEditingController(text: _bio);
     final roleCtrl = TextEditingController(text: _role);
+    final locationCtrl = TextEditingController(text: _location);
 
     showModalBottomSheet(
       context: context,
@@ -1485,23 +1655,44 @@ class _ProfileScreenState extends State<ProfileScreen> {
               _SheetTextField(
                   controller: roleCtrl, label: 'Role / Designation'),
               const SizedBox(height: 12),
+              _SheetTextField(controller: locationCtrl, label: 'Location'),
+              const SizedBox(height: 12),
               _SheetTextField(controller: bioCtrl, label: 'Bio', maxLines: 3),
               const SizedBox(height: 20),
               _SheetSaveButton(
-                onTap: () {
+                onTap: () async {
+                  final nextName = nameCtrl.text.trim().isNotEmpty
+                      ? nameCtrl.text.trim()
+                      : _name;
+                  final nameParts = _splitName(nextName);
+                  final nextBio = bioCtrl.text.trim().isNotEmpty
+                      ? bioCtrl.text.trim()
+                      : _bio;
+                  final nextRole = roleCtrl.text.trim().isNotEmpty
+                      ? roleCtrl.text.trim()
+                      : _role;
+                  final nextLocation = locationCtrl.text.trim().isNotEmpty
+                      ? locationCtrl.text.trim()
+                      : _location;
+
+                  final success = await _submitProfileUpdate(
+                    firstName: nameParts.firstName,
+                    lastName: nameParts.lastName,
+                    roleTitle: nextRole,
+                    bio: nextBio,
+                    locationName: nextLocation,
+                    successMessage: 'Profile updated successfully',
+                  );
+
+                  if (!success || !mounted) return;
+
                   setState(() {
-                    _name = nameCtrl.text.trim().isNotEmpty
-                        ? nameCtrl.text.trim()
-                        : _name;
-                    _bio = bioCtrl.text.trim().isNotEmpty
-                        ? bioCtrl.text.trim()
-                        : _bio;
-                    _role = roleCtrl.text.trim().isNotEmpty
-                        ? roleCtrl.text.trim()
-                        : _role;
+                    _name = nextName;
+                    _bio = nextBio;
+                    _role = nextRole;
+                    _location = nextLocation;
                   });
                   Navigator.pop(context);
-                  _showSnack(context, 'Profile updated successfully!');
                 },
               ),
             ],
@@ -1517,7 +1708,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     required String label,
     required String currentValue,
     required TextInputType keyboardType,
-    required ValueChanged<String> onSave,
+    required Future<bool> Function(String value) onSave,
   }) {
     final ctrl = TextEditingController(text: currentValue);
     showModalBottomSheet(
@@ -1536,12 +1727,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   controller: ctrl, label: label, keyboardType: keyboardType),
               const SizedBox(height: 20),
               _SheetSaveButton(
-                onTap: () {
+                onTap: () async {
+                  var success = true;
                   if (ctrl.text.trim().isNotEmpty) {
-                    onSave(ctrl.text.trim());
+                    success = await onSave(ctrl.text.trim());
                   }
+                  if (!success || !context.mounted) return;
                   Navigator.pop(context);
-                  _showSnack(context, '$label updated!');
                 },
               ),
             ],
@@ -1608,21 +1800,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
               },
             ),
             const SizedBox(height: 10),
-            // _UploadOption(
-            //   icon: Icons.image_rounded,
-            //   label: 'Profile',
-            //   subtitle: 'JPG, PNG - max 5 MB',
-            //   color: successGreen,
-            //   onTap: () {
-            //     Navigator.pop(context);
-            //     _pickAndUploadDocument(
-            //       docType: 'profile',
-            //       allowedExtensions: const ['jpg', 'jpeg', 'png'],
-            //       maxBytes: fiveMb,
-            //     );
-            //   },
-            // ),
-            // const SizedBox(height: 10),
+            _UploadOption(
+              icon: Icons.image_rounded,
+              label: 'Profile',
+              subtitle: 'JPG, PNG - max 5 MB',
+              color: successGreen,
+              onTap: () {
+                Navigator.pop(context);
+                _pickAndUploadDocument(
+                  docType: 'profile',
+                  allowedExtensions: const ['jpg', 'jpeg', 'png'],
+                  maxBytes: fiveMb,
+                );
+              },
+            ),
+            const SizedBox(height: 10),
             _UploadOption(
               icon: Icons.folder_open_rounded,
               label: 'Certificate / Documents',
@@ -1711,7 +1903,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               color: adminPrimary,
               onTap: () {
                 Navigator.pop(context);
-                _showSnack(context, 'Camera opened');
+                _pickAndUploadProfilePhoto(ImageSource.camera);
               },
             ),
             const SizedBox(height: 10),
@@ -1722,7 +1914,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               color: const Color(0xFF7C3AED),
               onTap: () {
                 Navigator.pop(context);
-                _showSnack(context, 'Gallery opened');
+                _pickAndUploadProfilePhoto(ImageSource.gallery);
               },
             ),
             const SizedBox(height: 16),

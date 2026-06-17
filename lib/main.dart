@@ -3,21 +3,32 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get_navigation/src/root/get_material_app.dart';
-import 'package:mytherapio_admin_app/screens/auth/document_upload_screen.dart';
 import 'package:mytherapio_admin_app/screens/auth/login_screen.dart';
+import 'package:mytherapio_admin_app/screens/dashboard_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.light,
   ));
-  runApp(const Mytherapioadminapp());
+
+  final prefs = await SharedPreferences.getInstance();
+  final token = prefs.getString('auth_token');
+  final hasToken = token != null && token.isNotEmpty;
+
+  runApp(Mytherapioadminapp(isLoggedIn: hasToken));
 }
 
 class Mytherapioadminapp extends StatelessWidget {
-  const Mytherapioadminapp({super.key});
+  final bool isLoggedIn;
+
+  const Mytherapioadminapp({
+    super.key,
+    required this.isLoggedIn,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -304,11 +315,10 @@ class Mytherapioadminapp extends StatelessWidget {
                   color: Color(0xFF8A8AA8)),
             ),
           ),
-          home: const LoginScreen(),
+          home: isLoggedIn ? const DashboardScreen() : const LoginScreen(),
           // home: const DocumentUploadScreen(),
         );
       },
     );
   }
 }
-

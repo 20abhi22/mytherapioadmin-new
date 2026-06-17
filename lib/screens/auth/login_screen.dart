@@ -16,20 +16,25 @@ const Color maincolor = Color(0xFF1B4FD8);
 class Country {
   final String flag;
   final String name;
+  final String code;
   final String dialCode;
-  const Country(
-      {required this.flag, required this.name, required this.dialCode});
+  const Country({
+    required this.flag,
+    required this.name,
+    required this.code,
+    required this.dialCode,
+  });
 }
 
 const List<Country> kCountries = [
-  Country(flag: '🇮🇳', name: 'India', dialCode: '+91'),
-  Country(flag: '🇺🇸', name: 'USA', dialCode: '+1'),
-  Country(flag: '🇦🇪', name: 'UAE', dialCode: '+971'),
-  Country(flag: '🇬🇧', name: 'UK', dialCode: '+44'),
-  Country(flag: '🇸🇬', name: 'Singapore', dialCode: '+65'),
-  Country(flag: '🇦🇺', name: 'Australia', dialCode: '+61'),
-  Country(flag: '🇨🇦', name: 'Canada', dialCode: '+1'),
-  Country(flag: '🇩🇪', name: 'Germany', dialCode: '+49'),
+  Country(flag: '🇮🇳', name: 'India', code: 'IN', dialCode: '+91'),
+  Country(flag: '🇺🇸', name: 'USA', code: 'US', dialCode: '+1'),
+  Country(flag: '🇦🇪', name: 'UAE', code: 'AE', dialCode: '+971'),
+  Country(flag: '🇬🇧', name: 'UK', code: 'GB', dialCode: '+44'),
+  Country(flag: '🇸🇬', name: 'Singapore', code: 'SG', dialCode: '+65'),
+  Country(flag: '🇦🇺', name: 'Australia', code: 'AU', dialCode: '+61'),
+  Country(flag: '🇨🇦', name: 'Canada', code: 'CA', dialCode: '+1'),
+  Country(flag: '🇩🇪', name: 'Germany', code: 'DE', dialCode: '+49'),
 ];
 
 
@@ -110,8 +115,9 @@ Future<void> _sendOtp() async {
   setState(() => _loading = true);
 
   final result = await API.loginSendOtpAPI(
-    countryCode: _selectedCountry.dialCode,  // e.g. "+91"
-    phone: phone,                          // e.g. "9876543210" (digits only)
+    countryCode: _selectedCountry.code,      // e.g. "IN"
+    phoneCode: _selectedCountry.dialCode,    // e.g. "+91"
+    phone: phone,                            // e.g. "9876543210" (digits only)
   );
 
   if (!mounted) return;
@@ -605,5 +611,3 @@ Future<void> _sendOtp() async {
     );
   }
 }
-
-
